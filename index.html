@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Messaging App</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Mobile block: pure CSS, gated entirely by the media query below, so it
+         reacts to resizes/rotation with no JS involved and never shows on desktop -->
+    <div class="mobile-block">
+        <div class="mobile-block-card">
+            <i data-lucide="monitor" class="mobile-block-icon"></i>
+            <h2>Best on desktop</h2>
+            <p>This prototype isn't optimized for mobile yet. Please use a desktop for the full experience.</p>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2 class="sidebar-title">Messages</h2>
+            <div class="sidebar-header-actions">
+                <button class="settings-toggle" id="settings-btn" aria-label="Open settings" title="Open settings">
+                    <i data-lucide="settings-2"></i>
+                </button>
+            </div>
+        </div>
+        <div class="conversation-list" id="conversation-list">
+        </div>
+        <button class="floating-action-btn" id="new-conversation-btn" aria-label="New conversation" title="New conversation">
+            <i data-lucide="plus"></i>
+        </button>
+    </div>
+
+    <!-- Chat Container -->
+    <div class="chat-container" id="chat-container">
+        <div class="empty-state" id="empty-state">
+            <div class="empty-state-icon"><i data-lucide="message-square"></i></div>
+            <h2 class="empty-state-text">No conversation selected</h2>
+            <p class="empty-state-subtext">Start a new conversation or select an existing one</p>
+        </div>
+        
+        <div id="active-chat" style="display: none; flex-direction: column; height: 100%;">
+            <div class="chat-header" id="chat-header">
+            </div>
+            
+            <div class="chat-messages-wrapper">
+            <div class="chat-messages" id="chat-messages">
+            </div>
+            </div>
+            
+            
+<div class="composer-wrapper" id="composer-wrapper">
+  <div class="composer" id="composer">
+    <div class="attachments-tray" id="attachments-tray"></div>
+    <div class="reply-preview" id="reply-preview">
+      <button class="pill-close" id="close-reply"><i data-lucide="x"></i></button>
+      <div class="reply-preview-text" id="reply-preview-text"></div>
+    </div>
+    <div class="editor-container" id="editor-container">
+      <div id="editor" contenteditable="true" placeholder="Type a message..." spellcheck="false"></div>
+      <div id="custom-caret" class="caret-blink"></div>
+    </div>
+    <div class="action-bar">
+      <div class="action-group">
+        <button class="icon-btn" id="upload-btn" title="Add attachment"><i data-lucide="paperclip"></i></button>
+      </div>
+      <div class="action-group">
+        <button class="icon-btn" id="composer-settings-btn" title="Settings"><i data-lucide="settings-2"></i></button>
+        <div class="recording-widget" id="recording-widget">
+          <span class="rec-timer" id="rec-timer">0:00</span>
+          <div class="rec-waveform-wrap" id="rec-waveform"></div>
+        </div>
+        <button class="icon-btn" id="mic-btn" aria-label="Voice input"><i data-lucide="mic"></i></button>
+        <div class="send-btn-container" style="position: relative; width: 40px; height: 40px;">
+          <div class="loudness-slider" id="loudness-slider"></div>
+          <button class="send-btn" id="send-btn" title="Send"><i data-lucide="arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="context-menu"></div>
+  <div class="settings-popover" id="composer-settings-menu"></div>
+</div>
+
+        </div>
+    </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="settings-overlay" id="settings-overlay">
+        <div class="settings-panel" id="settings-panel">
+            <div class="settings-sidebar">
+                <div class="settings-sidebar-header">
+                    <h2 class="settings-title">Settings</h2>
+                </div>
+                <div class="settings-tabs">
+                    <button class="settings-tab active" data-tab="bots">
+                        Bots
+                    </button>
+                    <button class="settings-tab" data-tab="providers">
+                        API Keys
+                    </button>
+                    <button class="settings-tab" data-tab="memory">
+                        Memory
+                    </button>
+                    <button class="settings-tab settings-tab-danger" data-tab="danger">
+                        Danger zone
+                    </button>
+                </div>
+            </div>
+            <div class="settings-main">
+                <div class="settings-header">
+                    <h3 class="settings-header-title" id="settings-header-title">Bots</h3>
+                    <button class="close-settings" id="close-settings" aria-label="Close settings" title="Close settings">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                <div class="settings-content">
+                    <!-- Bots Tab -->
+                    <div class="tab-content active" id="bots-tab">
+                        <div class="bots-toolbar">
+                            <input type="text" class="search-bar" id="bot-search" placeholder="Search bots...">
+                            <button class="btn" id="create-bot-btn">New bot</button>
+                        </div>
+                        <div id="bots-list"></div>
+                    </div>
+
+                    <!-- Providers Tab -->
+                    <div class="tab-content" id="providers-tab">
+                        <div id="providers-list"></div>
+                    </div>
+
+                    <!-- Bot Form (hidden initially) -->
+                    <div class="tab-content" id="bot-form-tab">
+                        <form id="bot-form">
+                            <div class="form-group">
+                                <label class="form-label">Provider & Model</label>
+                                <select class="form-select" id="bot-model" required>
+                                    <option value="">Select a model...</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="model-slug-group" style="display: none;">
+                                <label class="form-label">OpenRouter model slug</label>
+                                <input type="text" class="form-input" id="bot-model-slug" placeholder="anthropic/claude-sonnet-5" autocomplete="off" spellcheck="false">
+                                <div class="form-hint">Any model slug listed on openrouter.ai/models.</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Bot Name</label>
+                                <input type="text" class="form-input" id="bot-name" placeholder="Creative Assistant" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Bot Alias (for @mentions)</label>
+                                <input type="text" class="form-input" id="bot-alias" placeholder="creative" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Bot Colour</label>
+                                <div class="bot-color-picker" id="bot-color-picker">
+                                    <input type="color" id="bot-color" value="#4285F4" aria-label="Bot colour">
+                                    <span class="color-picker-value" id="bot-color-label"></span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">System Prompt</label>
+                                <textarea class="form-textarea" id="bot-prompt" placeholder="You are a concise writing partner. Ask a clarifying question before drafting." required></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" id="cancel-bot-btn">Cancel</button>
+                                <button type="submit" class="btn">Save bot</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Memory Tab -->
+                    <div class="tab-content" id="memory-tab">
+                        <div class="memory-stats" id="memory-stats">
+                            <div class="memory-stat-card">
+                                <div class="memory-stat-value" id="primary-memory-count">0</div>
+                                <div class="memory-stat-label">Primary Memories</div>
+                            </div>
+                            <div class="memory-stat-card">
+                                <div class="memory-stat-value" id="ltm-memory-count">0</div>
+                                <div class="memory-stat-label">Long-Term Memories</div>
+                            </div>
+                            <div class="memory-stat-card">
+                                <div class="memory-stat-value" id="cluster-count">0</div>
+                                <div class="memory-stat-label">Clusters</div>
+                            </div>
+                        </div>
+
+                        <div class="memory-settings-actions">
+                            <button class="btn btn-secondary" id="view-memories-btn">View all memories</button>
+                            <button class="btn btn-secondary" id="organize-ltm-btn">Organize long-term memories</button>
+                        </div>
+
+                        <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Configuration</h4>
+
+                        <div class="memory-config-group">
+                            <div>
+                                <div class="memory-config-label">Primary Memory Limit</div>
+                                <div class="memory-config-description">Max memories before migration to LTM</div>
+                            </div>
+                            <input type="number" class="memory-config-input" id="memory-limit-input" min="8" max="512" step="1" value="64" data-number-input>
+                        </div>
+
+                        <div class="memory-config-group">
+                            <div>
+                                <div class="memory-config-label">Enable Memory System</div>
+                                <div class="memory-config-description">Classify, save, and retrieve memories</div>
+                            </div>
+                            <label class="memory-config-toggle">
+                                <input type="checkbox" id="memory-enabled-toggle" checked>
+                                <span class="memory-config-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="memory-config-group">
+                            <div>
+                                <div class="memory-config-label">Lightweight Classification</div>
+                                <div class="memory-config-description">Use a fast, low-cost OpenRouter model for classification (if available)</div>
+                            </div>
+                            <label class="memory-config-toggle">
+                                <input type="checkbox" id="memory-use-lightweight">
+                                <span class="memory-config-slider"></span>
+                            </label>
+                        </div>
+
+                    </div>
+
+                    <div class="tab-content" id="danger-tab">
+                        <div class="danger-intro">
+                            <h4>Data controls</h4>
+                            <p>These actions are permanent and cannot be undone.</p>
+                        </div>
+                        <div class="danger-row">
+                            <div>
+                                <div class="danger-row-title">Delete all chats</div>
+                                <div class="danger-row-description">Removes every conversation and memory. API keys and bots are kept.</div>
+                            </div>
+                            <button class="danger-action danger-action-solid" id="nuke-chats-btn">Delete chats</button>
+                        </div>
+                        <div class="danger-row">
+                            <div>
+                                <div class="danger-row-title">Delete everything</div>
+                                <div class="danger-row-description">Removes chats, memories, bots, settings, and API keys.</div>
+                            </div>
+                            <button class="danger-action danger-action-solid" id="nuke-everything-btn">Delete everything</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Initial Setup Modal -->
+    <div class="modal-overlay" id="setup-modal">
+        <div class="modal-box">
+            <div class="modal-header">Welcome! Let's set up your first API key</div>
+            <p style="margin-bottom: 20px;">Select a provider to get started. Your first key powers the built-in Angel and Devil bots.</p>
+            <div class="provider-selection" id="provider-selection"></div>
+            <div id="api-key-input-section" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <input type="password" class="form-input" id="setup-api-key" placeholder="Enter your API key">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-secondary" id="setup-back-btn">Back</button>
+                    <button class="btn" id="setup-save-btn">Save & Continue</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Memory Modal -->
+    <div class="memory-modal-overlay" id="memory-modal-overlay">
+        <div class="memory-modal">
+            <div class="memory-modal-header">
+                <div class="modal-title">All Memories</div>
+                <div class="modal-description">Saved memories from all your conversations</div>
+            </div>
+
+            <div class="memory-modal-tabs">
+                <div class="memory-tab-item active" data-tab="primary">Primary</div>
+                <div class="memory-tab-item" data-tab="ltm">Long-Term</div>
+            </div>
+
+            <!-- Primary Memory Tab -->
+            <div class="memory-tab-content active" id="primaryTabContent">
+                <div class="memory-grid" id="memoryGrid"></div>
+            </div>
+
+            <!-- Long-Term Memory Tab -->
+            <div class="memory-tab-content" id="ltmTabContent">
+                <div id="ltmActions">
+                    <button id="organizeLtmBtn">Organize</button>
+                </div>
+                <div id="ltmCanvasContainer"></div>
+                <div id="ltmEmptyState" hidden>
+                    <div class="ltm-empty-card">
+                        <svg class="ltm-empty-art" viewBox="0 0 96 72" fill="none" aria-hidden="true">
+                            <!-- the island that isn't there yet -->
+                            <path d="M17 45c5-15 14-24 31-24s26 9 31 24" stroke="currentColor" stroke-width="2"
+                                  stroke-linecap="round" stroke-dasharray="5 7" opacity="0.8"/>
+                            <path d="M6 50c7 0 7-4 14-4s7 4 14 4 7-4 14-4 7 4 14 4 7-4 14-4 7 4 14 4"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+                            <path d="M6 62c7 0 7-4 14-4s7 4 14 4 7-4 14-4 7 4 14 4 7-4 14-4 7 4 14 4"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.28"/>
+                        </svg>
+                        <div class="ltm-empty-title">No long-term memories yet</div>
+                        <p class="ltm-empty-body">
+                            Memories drift here on their own once primary memory fills up. When a few
+                            have arrived, <strong>Organize</strong> groups them into islands you can browse.
+                        </p>
+                        <button class="ltm-empty-action" id="ltmEmptyPrimaryBtn" type="button">
+                            View primary memories
+                        </button>
+                    </div>
+                </div>
+                <div id="ltmMemoryListView">
+                    <div id="ltmListHeader">
+                        <button id="ltmListBackBtn">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <div id="ltmListTitle">Cluster Memories</div>
+                    </div>
+                    <div id="ltmListGrid" class="memory-grid"></div>
+                </div>
+            </div>
+
+            <div class="memory-modal-footer">
+                <button class="btn btn-secondary" id="close-memory-modal">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bot mention popup.
+         Lives at body level on purpose: the composer wrapper carries a
+         transform, which would make this element's position:fixed resolve
+         against that wrapper instead of the viewport. -->
+    <div class="mention-popup" id="mention-popup"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loading-text">Processing...</div>
+    </div>
+
+    <div class="confirm-overlay" id="incognito-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="incognito-confirm-title">
+        <div class="confirm-dialog">
+            <button class="confirm-close" id="incognito-confirm-close" aria-label="Close"><i data-lucide="x"></i></button>
+            <i class="confirm-icon" data-lucide="venetian-mask"></i>
+            <h3 id="incognito-confirm-title">Make this chat incognito?</h3>
+            <p>Its local copy will be removed. The chat remains available until this tab is refreshed or closed.</p>
+            <label class="confirm-check">
+                <input type="checkbox" id="incognito-dont-ask">
+                <span class="ui-toggle-switch" aria-hidden="true"></span>
+                <span>Do not ask this again</span>
+            </label>
+            <div class="confirm-actions">
+                <button class="btn btn-secondary" id="incognito-cancel-btn">Cancel</button>
+                <button class="btn" id="incognito-confirm-btn">Make incognito</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="confirm-overlay" id="danger-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="danger-confirm-title">
+        <div class="confirm-dialog danger-confirm-dialog">
+            <button class="confirm-close" id="danger-confirm-close" aria-label="Close"><i data-lucide="x"></i></button>
+            <i class="confirm-icon danger-confirm-icon" data-lucide="triangle-alert"></i>
+            <h3 id="danger-confirm-title">Delete all chats?</h3>
+            <p id="danger-confirm-description"></p>
+            <label class="danger-phrase-label" for="danger-confirm-input">Type <strong>DELETE</strong> to confirm</label>
+            <input class="form-input" id="danger-confirm-input" autocomplete="off" placeholder="DELETE">
+            <button class="danger-hold-btn" id="danger-hold-btn" disabled>
+                <span>Press and hold to delete</span>
+            </button>
+        </div>
+    </div>
+
+<!-- UI components (extracted from references/) -->
+<script src="chromatic-color-picker.js"></script>
+<script src="symbol-picker.js"></script>
+<script src="tactile-buttons.js"></script>
+<script src="number-input.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

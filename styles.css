@@ -3617,7 +3617,7 @@
 
         /* ===== Compact dark-surface refinements ===== */
         :root {
-            --chat-background: #111316;
+            --chat-background: #0c0d10;
             --ui-radius: 6px;
         }
 
@@ -4682,4 +4682,63 @@
             font-size: 13.5px;
             line-height: 1.55;
             color: var(--text-secondary);
+        }
+
+        /* ===== Sidebar brand: memory mark + "tldream;" ===== */
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin: 0;
+            font-weight: 400;
+            line-height: 1;
+        }
+
+        .sidebar-brand-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            color: #e6e8ec;
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.25));
+        }
+
+        .sidebar-brand-word {
+            display: inline-flex;
+            align-items: baseline;
+            padding-top: 1px;
+            font-family: 'Nunito', 'Satoshi', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            line-height: 1;
+        }
+
+        /* every two letters share a neon; no glow at rest — hovering a
+           letter lights it up and nudges it along to the next hue */
+        .brand-letter {
+            --c: #4d9fff;
+            --c-hover: #ff5c48;
+            font-family: inherit;
+            color: var(--c);
+            text-shadow: 0 0 0 transparent;
+            transition: color 0.22s ease, text-shadow 0.28s ease, transform 0.35s var(--ease-spring);
+            cursor: default;
+        }
+
+        .brand-letter[data-pair="1"] {
+            --c: #ff5c48;
+            --c-hover: #ffde59;
+        }
+
+        .brand-letter[data-pair="2"] {
+            --c: #ffde59;
+            --c-hover: #4d9fff;
+        }
+
+        .brand-letter:hover {
+            color: var(--c-hover);
+            text-shadow:
+                0 0 6px color-mix(in srgb, var(--c-hover) 70%, transparent),
+                0 0 18px color-mix(in srgb, var(--c-hover) 40%, transparent);
+            transform: translateY(-1.5px);
         }

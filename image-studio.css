@@ -1,0 +1,1500 @@
+/* =========================================================
+   Image Studio — image bots, painting state, canvas
+   ========================================================= */
+
+/* ---- paintbrush held by image-bot avatars ---- */
+.bot-face-avatar,
+.bot-card-avatar {
+    position: relative;
+}
+
+.avatar-brush {
+    position: absolute;
+    right: -6px;
+    bottom: -5px;
+    width: 62%;
+    height: 62%;
+    transform: rotate(-32deg);
+    transform-origin: 50% 80%;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+    pointer-events: none;
+    transition: transform 0.35s var(--ease-spring);
+}
+
+.bot-face-avatar:hover .avatar-brush,
+.bot-card:hover .avatar-brush {
+    transform: rotate(-18deg) translateY(-1px);
+}
+
+.mention-bot-avatar .avatar-brush {
+    right: -5px;
+    bottom: -4px;
+    width: 70%;
+    height: 70%;
+}
+
+.bot-kind-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(255, 94, 168, 0.12);
+    color: #ff8fc3;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    vertical-align: middle;
+}
+
+/* ---- New bot → kind popover ---- */
+.bot-kind-popover {
+    position: fixed;
+    z-index: 1100;
+    width: 312px;
+    padding: 6px;
+    border: 1px solid #262a31;
+    border-radius: 6px;
+    background: #16181d;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+    transition: opacity 0.18s var(--ease-out), transform 0.22s var(--ease-out);
+}
+
+.bot-kind-popover.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+button.bot-kind-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+    padding: 10px;
+    border: 0;
+    border-radius: 5px !important;
+    background: transparent;
+    color: var(--text-color);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+button.bot-kind-option:hover,
+button.bot-kind-option:focus-visible {
+    background: var(--hover-color);
+    outline: none;
+}
+
+.bot-kind-icon {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: #22252b;
+    color: #c9cdd4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bot-kind-icon svg:not(.avatar-brush) {
+    width: 16px;
+    height: 16px;
+}
+
+.bot-kind-icon.image {
+    background: #2b1f33;
+    color: #d7b6ff;
+}
+
+.bot-kind-icon .avatar-brush {
+    right: -7px;
+    bottom: -6px;
+    width: 60%;
+    height: 60%;
+}
+
+.bot-kind-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.bot-kind-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.bot-kind-desc {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+/* ---- bot form: kind banner ---- */
+.bot-kind-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 10px 12px;
+    border: 1px solid #262a31;
+    border-radius: 6px;
+    background: #16181d;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+}
+
+.bot-kind-banner .bot-kind-icon {
+    width: 28px;
+    height: 28px;
+}
+
+.bot-kind-banner .bot-kind-icon svg:not(.avatar-brush) {
+    width: 14px;
+    height: 14px;
+}
+
+.bot-kind-banner strong {
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+/* ---- image messages in the chat ---- */
+.message.bot.image-message {
+    padding: 0;
+    min-width: 0;
+    background: transparent;
+}
+
+.message-container.no-appear .message {
+    animation: none;
+}
+
+.chat-image-frame {
+    position: relative;
+    max-width: 100%;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #202329;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    cursor: zoom-in;
+}
+
+.chat-image-frame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    user-select: none;
+}
+
+.message.image-message .message-content.image-caption {
+    padding: 8px 2px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.message.image-message .message-time {
+    padding: 0 2px;
+}
+
+.message.image-message .message-actions {
+    top: 8px;
+    right: 8px;
+}
+
+/* ---- thinking state (text bots) and painting state (image bots) ---- */
+.thinking-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-top: 2px;
+    border-radius: 999px;
+    background: #202329;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    animation: messageAppear 0.5s var(--ease-out);
+}
+
+.thinking-indicator .typing-status {
+    margin-top: 12px;
+}
+
+.image-gen-frame {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: #202329;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    animation: messageAppear 0.5s var(--ease-out);
+}
+
+.image-gen-thinking {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    white-space: nowrap;
+    transition: opacity 0.25s ease;
+}
+
+.image-gen-frame.morphing {
+    transition: width 0.55s var(--ease-out), height 0.55s var(--ease-out), border-radius 0.55s var(--ease-out);
+}
+
+.image-gen-frame.morphing .image-gen-thinking {
+    position: absolute;
+    inset: 0;
+    justify-content: center;
+    opacity: 0;
+}
+
+.image-gen-frame.rect {
+    border-radius: 6px;
+}
+
+.spring-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.spring-path {
+    fill: none;
+    stroke: #8d93a0;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 200;
+    stroke-dashoffset: 200;
+    animation: drawPath 2.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes drawPath {
+    0% { stroke-dashoffset: 200; opacity: 0.3; }
+    50% { stroke-dashoffset: 0; opacity: 1; }
+    100% { stroke-dashoffset: -200; opacity: 0.3; }
+}
+
+.thinking-text {
+    display: flex;
+    font-size: 14px;
+    font-weight: 400;
+    color: #9a9fa8;
+    background: linear-gradient(90deg, #9a9fa8 0%, #9a9fa8 30%, #f2f3f5 50%, #9a9fa8 70%, #9a9fa8 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: textShimmer 5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.thinking-text span {
+    display: inline-block;
+}
+
+@keyframes textShimmer {
+    0% { background-position: 200% center; }
+    100% { background-position: -200% center; }
+}
+
+.image-gen-shimmer {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.10) 40%, rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0.10) 60%, transparent 80%),
+        linear-gradient(180deg, #23262c, #1c1f24);
+    background-size: 220% 100%, 100% 100%;
+    animation: frameShimmer 1.1s linear infinite;
+    transition: opacity 0.45s ease;
+}
+
+.image-gen-shimmer.out {
+    opacity: 0;
+}
+
+@keyframes frameShimmer {
+    0% { background-position: 120% 0, 0 0; }
+    100% { background-position: -120% 0, 0 0; }
+}
+
+.image-gen-preview {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transform: scale(1.03);
+    transition: opacity 0.5s ease, transform 0.6s var(--ease-out);
+}
+
+.image-gen-preview.in {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* ---- reply preview with an image thumbnail ---- */
+.reply-preview-text.has-thumb {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.reply-preview-thumb {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    object-fit: cover;
+    background: #202329;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.reply-preview-text.has-thumb span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* the sent reply shows what it answered */
+.reply-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    margin-bottom: 7px;
+    padding: 4px 8px 4px 4px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+
+.reply-chip.text-only {
+    padding: 4px 9px;
+    border-left: 2px solid var(--chip-accent, rgba(255, 255, 255, 0.35));
+    border-radius: 3px 6px 6px 3px;
+}
+
+.reply-chip img {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    border-radius: 3px;
+    object-fit: cover;
+}
+
+.reply-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- canvas panel ---- */
+.image-canvas-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 75vw;
+    z-index: 900;
+    background: #0e1013;
+    border-left: 1px solid #1f2329;
+    box-shadow: -30px 0 70px rgba(0, 0, 0, 0.55);
+    transform: translate3d(102%, 0, 0);
+    transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+    /* clip, not hidden: a hidden-overflow box can still be scrolled by focus
+       or scrollIntoView, which would shove the whole canvas sideways */
+    overflow: hidden;
+    overflow: clip;
+}
+
+.image-canvas-panel.open {
+    transform: translate3d(0, 0, 0);
+}
+
+button.canvas-close {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 30;
+    width: 34px;
+    height: 34px;
+    border: 1px solid #262a31;
+    border-radius: 50% !important;
+    background: #16181d;
+    color: #c9cdd4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    transition: background 0.15s ease, transform 0.2s var(--ease-spring);
+}
+
+button.canvas-close:hover {
+    background: #22252b;
+    transform: scale(1.06);
+}
+
+.canvas-close svg {
+    width: 15px;
+    height: 15px;
+}
+
+button.canvas-settings-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 30;
+    width: 34px;
+    height: 34px;
+    border: 1px solid #262a31;
+    border-radius: 50% !important;
+    background: #16181d;
+    color: #c9cdd4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    transition: background 0.15s ease, transform 0.2s var(--ease-spring);
+}
+
+button.canvas-settings-btn:hover {
+    background: #22252b;
+    transform: scale(1.06);
+}
+
+button.canvas-settings-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.canvas-hint {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(22, 24, 29, 0.85);
+    border: 1px solid #23272e;
+    color: var(--text-secondary);
+    font-size: 11px;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.canvas-viewport {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    overflow: clip;
+    cursor: grab;
+    background-color: #0e1013;
+    touch-action: none;
+}
+
+/* the dot grid fades out towards the chat on the left; the dots layer is
+   oversized and only ever translated within one cell, so panning is a
+   compositor-only transform */
+.canvas-grid {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to right, transparent 0, rgba(0, 0, 0, 0.35) 160px, #000 380px);
+    mask-image: linear-gradient(to right, transparent 0, rgba(0, 0, 0, 0.35) 160px, #000 380px);
+    pointer-events: none;
+}
+
+.canvas-grid-dots {
+    position: absolute;
+    inset: -200px;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.11) 1px, transparent 1.2px);
+    background-size: 24px 24px;
+    will-change: transform;
+}
+
+/* a faint glow that trails the pointer across the dots */
+.canvas-grid-glow {
+    --glow-x: -1000px;
+    --glow-y: -1000px;
+    --glow-angle: 0rad;
+    --glow-stretch: 1;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1.1px, transparent 1.6px);
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    /* the layer is inset -200px, so the pointer position is offset to match */
+    -webkit-mask-image: radial-gradient(ellipse calc(150px * var(--glow-stretch)) 150px at calc(var(--glow-x) + 200px) calc(var(--glow-y) + 200px), rgba(0, 0, 0, 0.9) 0, rgba(0, 0, 0, 0.35) 45%, transparent 72%);
+    mask-image: radial-gradient(ellipse calc(150px * var(--glow-stretch)) 150px at calc(var(--glow-x) + 200px) calc(var(--glow-y) + 200px), rgba(0, 0, 0, 0.9) 0, rgba(0, 0, 0, 0.35) 45%, transparent 72%);
+}
+
+.canvas-grid-glow.on {
+    opacity: 0.55;
+}
+
+.canvas-viewport.panning {
+    cursor: grabbing;
+}
+
+.canvas-world {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.canvas-edges {
+    position: absolute;
+    top: -50000px;
+    left: -50000px;
+    width: 100000px;
+    height: 100000px;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.canvas-edge-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 18;
+    pointer-events: none;
+}
+
+.canvas-edge-group.edit .canvas-edge-hit {
+    pointer-events: stroke;
+    cursor: pointer;
+}
+
+.canvas-edge-group.edit:hover .canvas-edge,
+.canvas-edge-group.active .canvas-edge {
+    stroke: rgba(255, 255, 255, 0.5);
+}
+
+/* the knot: a big white circle on the connector of a prompt-made variant */
+.edge-knot {
+    fill: #ffffff;
+    stroke: #0e1013;
+    stroke-width: 3;
+    pointer-events: auto;
+    cursor: pointer;
+    transition: r 0.25s cubic-bezier(0.22, 1.3, 0.36, 1), fill 0.2s ease;
+}
+
+.canvas-edge-group.edit:hover .edge-knot,
+.canvas-edge-group.active .edge-knot {
+    r: 11;
+}
+
+.edge-prompt-popover {
+    position: absolute;
+    z-index: 60;
+    width: 260px;
+    padding: 10px 12px;
+    border: 1px solid #2a2e36;
+    border-radius: 6px;
+    background: #16181d;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+    transform-origin: 50% 0;
+    transform: translateX(-50%) translateY(-6px) scale(var(--inv-zoom, 1));
+    opacity: 0;
+    transition: opacity 0.18s ease, transform 0.22s var(--ease-out);
+    cursor: default;
+}
+
+.edge-prompt-popover.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(var(--inv-zoom, 1));
+}
+
+.edge-prompt-popover::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    background: #16181d;
+    border-left: 1px solid #2a2e36;
+    border-top: 1px solid #2a2e36;
+    transform: translateX(-50%) rotate(45deg);
+}
+
+.edge-prompt-label {
+    margin-bottom: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.edge-prompt-text {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-color);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.canvas-node.prompt-showing .node-frame {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+
+.canvas-edge {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.22);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke 0.25s ease, stroke-width 0.25s ease;
+}
+
+.canvas-edge.lit {
+    stroke: #d7b6ff;
+    stroke-width: 2.5;
+    stroke-dasharray: 7 7;
+    animation: edgeFlow 0.55s linear infinite;
+}
+
+@keyframes edgeFlow {
+    to { stroke-dashoffset: 14; }
+}
+
+.canvas-nodes {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.canvas-node {
+    position: absolute;
+    transform-origin: 50% 50%;
+}
+
+.canvas-node.pop {
+    animation: nodePop 0.75s cubic-bezier(0.22, 1.3, 0.36, 1);
+    will-change: transform, opacity;
+}
+
+/* while its image is up in annotate mode the node is a hollow placeholder */
+.canvas-node.annotating .node-frame > *,
+.canvas-node.annotating .node-toolbar,
+.canvas-node.annotating .node-label {
+    visibility: hidden;
+}
+
+.canvas-node.annotating .node-frame {
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* the annotations a node was last edited with stay superposed on it */
+.node-annotation {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+}
+
+@keyframes nodePop {
+    0% { transform: scale(0.55) translateY(14px); opacity: 0; }
+    55% { transform: scale(1.05) translateY(-3px); opacity: 1; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.node-label {
+    position: absolute;
+    left: 2px;
+    bottom: 100%;
+    margin-bottom: 7px;
+    max-width: 100%;
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.75;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.canvas-node:hover .node-label {
+    opacity: 1;
+}
+
+.node-frame {
+    position: relative;
+    width: 100%;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #1a1d22;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    cursor: grab;
+    transition: box-shadow 0.25s ease, transform 0.25s var(--ease-out), height 0.35s var(--ease-out);
+}
+
+.canvas-node:hover .node-frame {
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.canvas-node.dragging .node-frame {
+    cursor: grabbing;
+    transform: scale(1.02);
+    box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.canvas-node.in-chain .node-frame {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(215, 182, 255, 0.55);
+}
+
+.node-frame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    user-select: none;
+    -webkit-user-drag: none;
+    transition: opacity 0.45s ease;
+}
+
+/* a freshly painted image fades in under the sweep */
+.node-frame img.fade {
+    opacity: 0;
+}
+
+.node-frame img.fade.in {
+    opacity: 1;
+}
+
+.node-shimmer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.10) 40%, rgba(255, 255, 255, 0.24) 50%, rgba(255, 255, 255, 0.10) 60%, transparent 80%);
+    background-size: 220% 100%;
+    transition: opacity 0.4s ease;
+}
+
+.canvas-node.loading .node-shimmer {
+    opacity: 1;
+    background:
+        linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.10) 40%, rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0.10) 60%, transparent 80%),
+        linear-gradient(180deg, #23262c, #1c1f24);
+    background-size: 220% 100%, 100% 100%;
+    animation: frameShimmer 1.1s linear infinite;
+}
+
+.node-shimmer.sweep {
+    opacity: 1;
+    animation: nodeSweep 0.9s var(--ease-out) forwards;
+}
+
+@keyframes nodeSweep {
+    0% { background-position: 140% 0; opacity: 1; }
+    80% { opacity: 1; }
+    100% { background-position: -140% 0; opacity: 0; }
+}
+
+.node-error {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #ff8f94;
+    background: #1d1518;
+    white-space: pre-line;
+    cursor: pointer;
+}
+
+.canvas-node.error .node-error {
+    display: flex;
+}
+
+.node-saved {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #4285F4;
+    color: #fff;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.node-saved svg {
+    width: 13px;
+    height: 13px;
+}
+
+.canvas-node.saved .node-saved {
+    display: flex;
+}
+
+/* floating toolbar: centred, half overlapping the bottom edge */
+.node-toolbar {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    z-index: 3;
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid #2a2e36;
+    border-radius: 999px;
+    background: rgba(22, 24, 29, 0.96);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+    transform: translate(-50%, 50%) translateY(6px) scale(calc(0.92 * var(--inv-zoom, 1)));
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.28s var(--ease-spring);
+}
+
+.canvas-node.ready:hover .node-toolbar {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 50%) translateY(0) scale(var(--inv-zoom, 1));
+}
+
+.canvas-node.prompt-open .node-toolbar,
+.canvas-node.ready.prompt-open:hover .node-toolbar {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.node-toolbar button {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 50% !important;
+    background: transparent;
+    color: #c9cdd4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.2s var(--ease-spring);
+}
+
+.node-toolbar button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.node-toolbar button svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* prompt box: docks flush under the image, full width, squared where it joins */
+.node-prompt {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    z-index: 4;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #2a2e36;
+    border-top: 0;
+    border-radius: 0 0 6px 6px;
+    background: #16181d;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+    transform: translateY(-6px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, transform 0.22s var(--ease-out), visibility 0.18s;
+}
+
+.canvas-node.prompt-open .node-prompt {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.canvas-node.prompt-open .node-frame {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.node-prompt textarea {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 0 !important;
+    background: transparent;
+    color: var(--text-color);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.45;
+    resize: none;
+    outline: none;
+}
+
+.node-prompt-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 8px 10px;
+    border-top: 1px solid #22262d;
+}
+
+.node-prompt-actions .btn {
+    height: 30px;
+    padding: 0 12px;
+    font-size: 12px;
+}
+
+/* toast */
+.studio-toast {
+    position: absolute;
+    left: 50%;
+    bottom: 50px;
+    z-index: 40;
+    padding: 8px 14px;
+    border-radius: 6px;
+    background: #22252b;
+    border: 1px solid #2f343c;
+    color: var(--text-color);
+    font-size: 12.5px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+    transform: translateX(-50%) translateY(10px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.3s var(--ease-out);
+}
+
+.studio-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.studio-toast.error {
+    border-color: #6e3438;
+    color: #ff8f94;
+}
+
+/* ---- settings side panel (360px) ---- */
+.canvas-settings {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 35;
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    background: #121418;
+    border-left: 1px solid #1f2329;
+    box-shadow: -20px 0 50px rgba(0, 0, 0, 0.5);
+    transform: translate3d(104%, 0, 0);
+    visibility: hidden;
+    will-change: transform;
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.5s;
+    cursor: default;
+}
+
+.canvas-settings.open {
+    transform: translate3d(0, 0, 0);
+    visibility: visible;
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s;
+}
+
+.canvas-settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    padding: 0 12px 0 18px;
+    border-bottom: 1px solid #1f2329;
+    flex-shrink: 0;
+}
+
+.canvas-settings-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.canvas-settings-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+button.canvas-settings-close {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 50% !important;
+    background: #1c1f25;
+    color: #c9cdd4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+button.canvas-settings-close:hover {
+    background: #262a31;
+}
+
+.canvas-settings-close svg {
+    width: 14px;
+    height: 14px;
+}
+
+.canvas-settings-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    scrollbar-width: thin;
+}
+
+.canvas-settings-body section {
+    margin-bottom: 22px;
+}
+
+.canvas-settings-body h4 {
+    margin-bottom: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.cs-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+    min-width: 0;
+}
+
+.cs-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.cs-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+.cs-label small {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+.cs-label output {
+    font-variant-numeric: tabular-nums;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+
+.canvas-settings .form-input,
+.canvas-settings .form-select,
+.canvas-settings .form-textarea {
+    padding: 8px 10px;
+    font-size: 13px;
+    background: #0f1115;
+    border-color: #262a31;
+}
+
+.canvas-settings .form-select {
+    padding-right: 30px;
+}
+
+.canvas-settings .form-textarea {
+    min-height: 0;
+    line-height: 1.45;
+}
+
+.canvas-settings .cs-styles {
+    font-size: 12.5px;
+}
+
+.canvas-settings input[type="range"] {
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+.canvas-settings input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: #2a2e36;
+}
+
+.canvas-settings input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: #f2f3f5;
+    border: 3px solid #121418;
+    box-shadow: 0 0 0 1px #3a3f48;
+    transition: transform 0.15s var(--ease-spring);
+}
+
+.canvas-settings input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.12);
+}
+
+.canvas-settings input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: #2a2e36;
+}
+
+.canvas-settings input[type="range"]::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #f2f3f5;
+    border: 3px solid #121418;
+    box-shadow: 0 0 0 1px #3a3f48;
+}
+
+/* pinned under the scrolling body, with its divider spanning the panel */
+.canvas-settings-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    padding: 12px 18px;
+    border-top: 1px solid #1f2329;
+    background: #121418;
+}
+
+.cs-saved {
+    font-size: 11.5px;
+    color: var(--success-color);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.cs-saved.show {
+    opacity: 1;
+}
+
+/* ---- annotate mode ---- */
+.annotate-root {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    pointer-events: none;
+}
+
+.annotate-root.open {
+    pointer-events: auto;
+}
+
+.annotate-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 6, 8, 0.62);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    backdrop-filter: blur(14px) saturate(1.1);
+    opacity: 0;
+    transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.annotate-root.open .annotate-backdrop {
+    opacity: 1;
+}
+
+.annotate-stage {
+    position: absolute;
+    transform-origin: 0 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #111317;
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    will-change: transform;
+    opacity: 0;
+    transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+}
+
+.annotate-root.open .annotate-stage,
+.annotate-root.parked .annotate-stage {
+    opacity: 1;
+}
+
+.annotate-root:not(.open):not(.parked) .annotate-stage {
+    transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease 0.45s;
+}
+
+.annotate-root.parked .annotate-stage {
+    opacity: 0;
+    transition: none;
+}
+
+.annotate-base,
+.annotate-ink,
+.annotate-surface,
+.annotate-texts {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.annotate-base {
+    display: block;
+    object-fit: cover;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.annotate-surface {
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.annotate-root[data-tool="text"] .annotate-surface {
+    pointer-events: none;
+}
+
+.annotate-root[data-tool="pen"] .annotate-texts {
+    pointer-events: none;
+}
+
+.annotate-root[data-tool="text"] .annotate-texts {
+    cursor: text;
+}
+
+.annotate-text {
+    position: absolute;
+    min-width: 1ch;
+    max-width: 60%;
+    padding: 0.1em 0.3em;
+    border-radius: 0.2em;
+    color: #ffffff;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: pre-wrap;
+    word-break: break-word;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.6);
+    outline: none;
+    cursor: text;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.annotate-text:focus {
+    background: rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.annotate-text:empty::before {
+    content: 'Type a note…';
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 500;
+}
+
+/* the vertical tools beside the image */
+.annotate-tools {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    transform: translate(8px, -50%);
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.annotate-root.ready .annotate-tools {
+    opacity: 1;
+    transform: translate(0, -50%);
+}
+
+/* pen colour swatch: Chromatic's swatch button restyled as a round chip */
+.annotate-swatch {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.22, 1.3, 0.36, 1);
+}
+
+.annotate-root[data-tool="text"] .annotate-swatch {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.6) translateY(8px);
+}
+
+.annotate-swatch .cp-wrap {
+    display: flex;
+}
+
+.annotate-swatch button.cp-swatch {
+    width: 36px;
+    height: 36px;
+    border-radius: 50% !important;
+    border: 3.5px solid #ffffff;
+    box-shadow:
+        inset 0 2px 5px rgba(0, 0, 0, 0.28),
+        inset 0 -1px 2px rgba(255, 255, 255, 0.18),
+        0 4px 12px rgba(0, 0, 0, 0.35);
+    transition: transform 0.25s cubic-bezier(0.22, 1.3, 0.36, 1), box-shadow 0.2s ease;
+}
+
+.annotate-swatch button.cp-swatch:hover {
+    transform: scale(1.08);
+    box-shadow:
+        inset 0 2px 5px rgba(0, 0, 0, 0.28),
+        inset 0 -1px 2px rgba(255, 255, 255, 0.18),
+        0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.annotate-swatch button.cp-swatch:active {
+    transform: scale(0.96);
+}
+
+.annotate-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 5px;
+    border: 1px solid #2a2e36;
+    border-radius: 999px;
+    background: rgba(22, 24, 29, 0.96);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+.annotate-toolbar button,
+button.annotate-done,
+button.annotate-cancel {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50% !important;
+    background: transparent;
+    color: #c9cdd4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.25s cubic-bezier(0.22, 1.3, 0.36, 1);
+}
+
+.annotate-toolbar button svg,
+button.annotate-done svg,
+button.annotate-cancel svg {
+    width: 16px;
+    height: 16px;
+}
+
+.annotate-toolbar button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.annotate-toolbar button.active {
+    background: #ffffff;
+    color: #111317;
+}
+
+button.annotate-done {
+    width: 40px;
+    height: 40px;
+    background: #4285F4;
+    color: #fff;
+    box-shadow: 0 12px 30px rgba(66, 133, 244, 0.35);
+}
+
+button.annotate-done:hover {
+    transform: scale(1.08);
+}
+
+button.annotate-cancel {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    border: 1px solid #262a31;
+    background: #16181d;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transition: opacity 0.3s ease, background 0.15s ease;
+}
+
+.annotate-root.ready button.annotate-cancel {
+    opacity: 1;
+}
+
+button.annotate-cancel:hover {
+    background: #22252b;
+}
+
+.annotate-hint {
+    position: absolute;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid #23272e;
+    background: rgba(22, 24, 29, 0.85);
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.annotate-root.ready .annotate-hint {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .canvas-node.pop,
+    .node-shimmer.sweep,
+    .canvas-edge.lit,
+    .image-gen-shimmer,
+    .spring-path,
+    .thinking-text {
+        animation: none;
+    }
+}

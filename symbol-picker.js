@@ -128,7 +128,10 @@ const CSS = `
 .sp-search input::placeholder{color:var(--sp-muted)}
 .sp-search input::-webkit-search-cancel-button,.sp-search input::-webkit-search-decoration{-webkit-appearance:none;appearance:none}
 
-.sp-scroll{position:relative;height:min(300px,46vh);overflow-y:auto;overscroll-behavior:contain;
+/* vertical only: overflow-y:auto alone would make the x-axis auto too, and
+   a glyph wider than its cell would then scroll the grid sideways */
+.sp-scroll{position:relative;height:min(300px,46vh);overflow-x:hidden;overflow-x:clip;overflow-y:auto;
+  overscroll-behavior:contain;touch-action:pan-y;
   scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent}
 .sp-scroll::-webkit-scrollbar{width:8px}
 .sp-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:8px;border:2px solid var(--sp-panel)}
@@ -137,14 +140,14 @@ const CSS = `
    minmax(0,1fr) keeps the tracks purely proportional — an intrinsic minimum
    would otherwise let the glyphs push the columns wider than the popover. */
 .sp-grid{display:grid;grid-template-columns:repeat(13,minmax(0,1fr));gap:2px;padding:6px 10px 8px}
-.sp-popover .sp-cell{position:relative;height:26px;min-width:0;border-radius:5px !important;border:0;background:none;cursor:pointer;
+.sp-popover .sp-cell{position:relative;height:26px;min-width:0;overflow:hidden;border-radius:5px !important;border:0;background:none;cursor:pointer;
   display:flex;align-items:center;justify-content:center;padding:0;color:var(--sp-accent);
   transition:background .15s ease,color .6s cubic-bezier(.3,.1,.2,1) var(--sp-d,0ms)}
 .sp-cell:hover{background:rgba(255,255,255,.07)}
 .sp-cell.sp-picked{background:rgba(255,255,255,.12)}
 .sp-cell[hidden]{display:none}
 .sp-cell svg{width:17px;height:17px;fill:currentColor;display:block}
-.sp-cell.sp-emoji{font-family:var(--sp-emoji-font);font-size:17px;line-height:1}
+.sp-cell.sp-emoji{font-family:var(--sp-emoji-font);font-size:17px;line-height:1;white-space:nowrap}
 
 .sp-empty{padding:26px 14px;color:var(--sp-muted);text-align:center;font-size:13px}
 .sp-empty[hidden]{display:none}
@@ -157,20 +160,26 @@ const CSS = `
    can overlap the divider it sits against */
 .sp-cats{display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;gap:6px;
   width:38px;flex:none;padding:8px 0;border-right:1px solid var(--sp-line);position:relative}
-.sp-popover .sp-cat{position:relative;width:27px;height:26px;border-radius:3px 0 0 3px !important;
+/* every tab keeps the same box whether or not it is active, so switching
+   never moves anything; the active look is drawn by .sp-cat-ink below */
+.sp-popover .sp-cat{position:relative;z-index:1;width:28px;height:26px;margin-right:-1px;
+  border-radius:3px 0 0 3px !important;
   border:0;background:none;cursor:pointer;padding:0;
   display:flex;align-items:center;justify-content:center;
   font-family:var(--sp-emoji-font);font-size:14px;line-height:1;filter:grayscale(1);opacity:.55;
-  transition:opacity .15s,filter .15s,background .15s}
+  transition:opacity .2s,filter .2s,background .15s}
 .sp-cat:hover{opacity:1;background:rgba(255,255,255,.07)}
-/* active tab: bordered on three sides and opening toward the grid, its own
-   background hiding the 1px divider (margin-right:-1px pulls it over that line) */
-.sp-popover .sp-cat.sp-active{
-  opacity:1;filter:none;
-  width:28px;margin-right:-1px;
-  background:var(--sp-panel);
-  border:1px solid var(--sp-line-strong);
-  border-right:0}
+.sp-popover .sp-cat.sp-active{opacity:1;filter:none;background:none}
+/* the active indicator: bordered on three sides, open toward the grid, its
+   panel-coloured fill covering the rail's 1px divider. It slides between tabs
+   on the compositor instead of any tab changing size. */
+.sp-cat-ink{position:absolute;top:0;right:-1px;width:28px;height:26px;z-index:0;
+  border:1px solid var(--sp-line-strong);border-right:0;border-radius:3px 0 0 3px;
+  background:var(--sp-panel);pointer-events:none;
+  transform:translate3d(0,var(--ink-y,0px),0);will-change:transform;
+  transition:transform .38s cubic-bezier(.22,1,.36,1),opacity .2s ease}
+.sp-cat-ink.sp-ink-still{transition:none}
+.sp-cat-ink.sp-ink-off{opacity:0}
 /* stays last so it outranks the display:flex above */
 .sp-cats[hidden],.sp-popover .sp-cat[hidden]{display:none !important}
 
@@ -489,11 +498,54 @@ function renderRecents(){
   const cat = els.emojiCats.querySelector('[data-target="sp-sec-recent"]');
   if (cat) cat.hidden = recents.length === 0;
 }
+let catInk = null;
+let catInkPlaced = false;
+let catLock = null;      // a clicked target, held until its smooth scroll settles
+let catLockTimer = 0;
+let catPinned = null;    // a clicked target too short to reach the top of the grid
+
+function setActiveCat(active){
+  let tab = null;
+  els.emojiCats.querySelectorAll('.sp-cat').forEach(c => {
+    const on = c.dataset.target === active;
+    c.classList.toggle('sp-active', on);
+    if (on) tab = c;
+  });
+  if (!catInk) return;
+  // the rail has no layout while hidden; measure again once it is shown
+  if (!tab || tab.hidden || !tab.offsetHeight){
+    catInk.classList.add('sp-ink-off');
+    return;
+  }
+  const first = !catInkPlaced || catInk.classList.contains('sp-ink-off');
+  if (first) catInk.classList.add('sp-ink-still');
+  catInk.style.setProperty('--ink-y', tab.offsetTop + 'px');
+  catInk.classList.remove('sp-ink-off');
+  catInkPlaced = true;
+  if (first){
+    void catInk.offsetWidth;
+    catInk.classList.remove('sp-ink-still');
+  }
+}
 function syncActiveCat(){
-  const top = els.emojiScroll.scrollTop + 8;
+  if (catLock){ setActiveCat(catLock); return; }
+  const scroller = els.emojiScroll;
+  const top = scroller.scrollTop + 8;
   let active = null;
-  els.emojiScroll.querySelectorAll('.sp-section:not([hidden])').forEach(s => { if (s.offsetTop <= top) active = s.id; });
-  els.emojiCats.querySelectorAll('.sp-cat').forEach(c => c.classList.toggle('sp-active', c.dataset.target === active));
+  let activeTop = -1;
+  scroller.querySelectorAll('.sp-section:not([hidden])').forEach(s => { if (s.offsetTop <= top){ active = s.id; activeTop = s.offsetTop; } });
+  // at the very bottom the last few sections can never reach the top, so a
+  // clicked one stays selected until the grid is scrolled back up
+  const atBottom = scroller.scrollTop >= scroller.scrollHeight - scroller.clientHeight - 2;
+  const pinned = catPinned && $('#' + catPinned, pop);
+  if (atBottom && pinned && !pinned.hidden && pinned.offsetTop > activeTop) active = catPinned;
+  else if (!atBottom) catPinned = null;
+  setActiveCat(active);
+}
+function releaseCatLock(){
+  clearTimeout(catLockTimer);
+  catLock = null;
+  syncActiveCat();
 }
 function buildEmoji(){
   const groups = [['Frequently used', []], ...EMOJI];
@@ -503,15 +555,31 @@ function buildEmoji(){
   }).join('');
   els.emojiCats.innerHTML = groups.map(([g], i) =>
     `<button class="sp-cat" type="button" role="tab" data-target="${i===0?'sp-sec-recent':'sp-sec-'+i}" title="${g}" aria-label="${g}">${CAT_GLYPHS[g] || '•'}</button>`).join('');
+  catInk = document.createElement('span');
+  catInk.className = 'sp-cat-ink sp-ink-off';
+  catInk.setAttribute('aria-hidden', 'true');
+  els.emojiCats.appendChild(catInk);
   renderRecents();
 
   els.emojiCats.addEventListener('click', e => {
     const b = e.target.closest('.sp-cat');
     if (!b) return;
     const sec = $('#' + b.dataset.target, pop);
-    if (sec) els.emojiScroll.scrollTo({top: sec.offsetTop, behavior: reduceMotion ? 'auto' : 'smooth'});
+    if (!sec) return;
+    const max = els.emojiScroll.scrollHeight - els.emojiScroll.clientHeight;
+    const target = Math.min(sec.offsetTop, max);
+    if (Math.abs(els.emojiScroll.scrollTop - target) < 1){ catPinned = b.dataset.target; setActiveCat(b.dataset.target); return; }
+    catLock = b.dataset.target;
+    catPinned = b.dataset.target;
+    setActiveCat(catLock);
+    clearTimeout(catLockTimer);
+    catLockTimer = setTimeout(releaseCatLock, 900);  // fallback when scrollend is unsupported
+    els.emojiScroll.scrollTo({top: target, behavior: reduceMotion ? 'auto' : 'smooth'});
   });
   els.emojiScroll.addEventListener('scroll', syncActiveCat, {passive:true});
+  els.emojiScroll.addEventListener('scrollend', () => { if (catLock) releaseCatLock(); });
+  // a wheel or touch during a clicked scroll hands control back to the user
+  ['wheel', 'touchstart'].forEach(type => els.emojiScroll.addEventListener(type, () => { if (catLock) releaseCatLock(); }, {passive:true}));
   els.emojiScroll.addEventListener('click', e => {
     const c = e.target.closest('.sp-cell');
     if (c) pick('emoji', c.dataset.value, c);

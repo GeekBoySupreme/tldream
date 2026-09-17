@@ -6,8 +6,10 @@
     <title>AI Messaging App</title>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="image-studio.css">
 </head>
 <body>
     <!-- Mobile block: pure CSS, gated entirely by the media query below, so it
@@ -23,7 +25,13 @@
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">
-            <h2 class="sidebar-title">Messages</h2>
+            <h1 class="sidebar-brand" aria-label="tldream">
+                <svg class="sidebar-brand-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <circle cx="4.5" cy="19.5" r="2" fill="currentColor"/>
+                    <path d="M13.413 2.71502C13.4302 2.71346 13.4408 2.71253 13.4582 2.71228C14.3102 2.69925 15.1311 3.03223 15.7333 3.63511C16.4363 4.33812 16.6571 5.13299 16.6568 6.09799C16.8045 6.03638 17.0222 5.97134 17.1775 5.93723C17.9888 5.76176 18.8365 5.91262 19.5374 6.35717C20.2562 6.81531 20.7591 7.54463 20.932 8.37928C21.1031 9.18843 20.9483 10.0324 20.5009 10.7281C20.0695 11.395 19.3673 11.9253 18.5847 12.0921C18.6282 12.1377 18.6696 12.1853 18.7087 12.2347C19.1988 12.8648 19.4138 13.7339 19.3121 14.5223C19.2039 15.3591 18.7671 16.1184 18.098 16.6325C17.438 17.1423 16.6025 17.3688 15.7755 17.2621C14.765 17.127 14.1392 16.6538 13.5401 15.8699C13.5199 15.8351 13.5337 15.847 13.5 15.8305C13.4011 15.9075 13.3118 16.0632 13.2284 16.1612C12.085 17.5045 10.1502 17.6628 8.79159 16.5503C8.15869 16.0225 7.75744 15.268 7.6737 14.4482C7.58893 13.5597 7.83686 12.7786 8.40215 12.0931C8.21724 12.0537 8.07336 12.0056 7.89923 11.9282C7.11965 11.5875 6.51038 10.9469 6.20916 10.1512C5.91032 9.3724 5.93247 8.50692 6.27072 7.74443C6.61988 6.97043 7.26201 6.36668 8.05606 6.06586C8.75254 5.80084 9.65144 5.79497 10.3356 6.10026C10.3327 5.61046 10.3736 5.17679 10.5577 4.71795C11.0439 3.50561 12.1242 2.77686 13.413 2.71502Z" fill="currentColor"/>
+                </svg>
+                <span class="sidebar-brand-word" aria-hidden="true"><span class="brand-letter" data-pair="0">t</span><span class="brand-letter" data-pair="0">l</span><span class="brand-letter" data-pair="1">d</span><span class="brand-letter" data-pair="1">r</span><span class="brand-letter" data-pair="2">e</span><span class="brand-letter" data-pair="2">a</span><span class="brand-letter" data-pair="0">m</span><span class="brand-letter" data-pair="0">;</span></span>
+            </h1>
             <div class="sidebar-header-actions">
                 <button class="settings-toggle" id="settings-btn" aria-label="Open settings" title="Open settings">
                     <i data-lucide="settings-2"></i>
@@ -140,7 +148,27 @@
                     <!-- Bot Form (hidden initially) -->
                     <div class="tab-content" id="bot-form-tab">
                         <form id="bot-form">
-                            <div class="form-group">
+                            <input type="hidden" id="bot-kind" value="conversation">
+                            <div class="bot-kind-banner" id="bot-kind-banner"></div>
+                            <div class="form-group" id="image-provider-group" style="display: none;">
+                                <label class="form-label">Image provider</label>
+                                <select class="form-select" id="bot-image-provider"></select>
+                            </div>
+                            <div class="form-group" id="image-model-group" style="display: none;">
+                                <label class="form-label">Image model</label>
+                                <select class="form-select" id="bot-image-model"></select>
+                            </div>
+                            <div class="form-group" id="image-custom-model-group" style="display: none;">
+                                <label class="form-label">Gemini model id</label>
+                                <input type="text" class="form-input" id="bot-image-custom-model" placeholder="gemini-2.5-flash-image" autocomplete="off" spellcheck="false">
+                                <div class="form-hint">Checked against the Gemini API when you save.</div>
+                            </div>
+                            <div class="form-group" id="image-slug-group" style="display: none;">
+                                <label class="form-label">OpenRouter model slug</label>
+                                <input type="text" class="form-input" id="bot-image-slug" placeholder="google/gemini-2.5-flash-image" autocomplete="off" spellcheck="false">
+                                <div class="form-hint">Must be a model that outputs images. Verified against openrouter.ai/models when you save.</div>
+                            </div>
+                            <div class="form-group" id="model-group">
                                 <label class="form-label">Provider & Model</label>
                                 <select class="form-select" id="bot-model" required>
                                     <option value="">Select a model...</option>
@@ -167,7 +195,7 @@
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">System Prompt</label>
+                                <label class="form-label" id="bot-prompt-label">System Prompt</label>
                                 <textarea class="form-textarea" id="bot-prompt" placeholder="You are a concise writing partner. Ask a clarifying question before drafting." required></textarea>
                             </div>
                             <div class="form-actions">
@@ -389,5 +417,6 @@
 <script src="tactile-buttons.js"></script>
 <script src="number-input.js"></script>
 <script src="script.js"></script>
+<script src="image-studio.js"></script>
 </body>
 </html>

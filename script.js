@@ -1332,7 +1332,35 @@ Respond ONLY with the JSON object.`;
             return bots.find(bot => bot.isDefault) || bots[0] || null;
         }
 
+        // Pixi paints. She is seeded once an image-capable key exists: on
+        // OpenRouter when there is a key for it, otherwise on Gemini.
+        const PIXI_BOT = {
+            name: 'Pixi',
+            alias: 'pixi',
+            color: '#C77DFF',
+            kind: 'image',
+            systemPrompt: ''
+        };
+
+        const PIXI_MODEL_DEFAULTS = {
+            google: 'gemini-2.5-flash-image',
+            openrouter: 'google/gemini-2.5-flash-image'
+        };
+
+        async function ensurePixiBot() {
+            if (await getSetting('pixiSeeded', false)) return;
+            const apiKeys = await getAllApiKeys();
+            const provider = ['openrouter', 'google'].find(p => apiKeys.some(k => k.provider === p));
+            if (!provider) return;
+            const taken = (await getAllBots()).some(bot => bot.alias === PIXI_BOT.alias);
+            if (!taken) {
+                await saveBot({ ...PIXI_BOT, provider, modelId: PIXI_MODEL_DEFAULTS[provider] });
+            }
+            await saveSetting('pixiSeeded', true);
+        }
+
         async function ensureDefaultBots(provider) {
+            await ensurePixiBot();
             if (await getSetting('defaultBotsSeeded', false)) return;
             const providerConfig = MODEL_PROVIDERS[provider];
             if (!providerConfig) return;
@@ -1689,7 +1717,12 @@ Respond ONLY with the JSON object.`;
 
             return messages.map(msg => {
                 const role = msg.sender === 'user' ? 'user' : 'assistant';
-                let content = msg.text;
+                let content = msg.text || '';
+                if (msg.image) {
+                    const painter = msg.botName || 'The image bot';
+                    const about = msg.imagePrompt ? ` for the prompt "${msg.imagePrompt}"` : '';
+                    content = `[${painter} painted an image${about}]${content ? ` ${content}` : ''}`;
+                }
 
                 if (msg.loudness && parseFloat(msg.loudness) > 0.7) {
                     content = `[Speaking loudly] ${content}`;
@@ -2571,7 +2604,13 @@ Respond ONLY with the JSON object.`;
             });
             
             // Bot management
-            document.getElementById('create-bot-btn').addEventListener('click', showBotForm);
+            document.getElementById('create-bot-btn').addEventListener('click', event => {
+                if (window.ImageStudio) {
+                    ImageStudio.openBotKindPopover(event.currentTarget, kind => showBotForm(null, kind));
+                } else {
+                    showBotForm();
+                }
+            });
             document.getElementById('cancel-bot-btn').addEventListener('click', () => switchSettingsTab('bots'));
             document.getElementById('bot-form').addEventListener('submit', handleBotFormSubmit);
             document.getElementById('bot-search').addEventListener('input', handleBotSearch);
@@ -2762,6 +2801,11 @@ Respond ONLY with the JSON object.`;
                 const modelData = MODEL_PROVIDERS[bot.provider]?.models.find(m => m.id === bot.modelId);
                 const botColor = bot.color || BOT_COLORS[0];
                 const eyeColor = getEyeColorForAvatar(botColor);
+                const isImageBot = bot.kind === 'image';
+                const studio = window.ImageStudio;
+                const modelLabel = isImageBot && studio
+                    ? `${studio.imageModelLabel(bot)} · ${studio.IMAGE_PROVIDERS[bot.provider] || bot.provider}`
+                    : (modelData?.name || bot.modelId);
                 
                 const card = document.createElement('div');
                 card.className = 'bot-card';
@@ -2771,6 +2815,7 @@ Respond ONLY with the JSON object.`;
                             <div class="bot-card-avatar" style="background-color: ${botColor};">
                                 <span class="bot-card-eye" style="background-color: ${eyeColor};"></span>
                                 <span class="bot-card-eye" style="background-color: ${eyeColor};"></span>
+                                ${isImageBot && studio ? studio.brushMarkup() : ''}
                             </div>
                             <div>
                                 <div class="bot-name">${bot.name}</div>
@@ -2786,7 +2831,7 @@ Respond ONLY with the JSON object.`;
                             </button>
                         </div>
                     </div>
-                    <div class="bot-model">${modelData?.name || bot.modelId}${bot.isDefault ? ' · Default' : ''}</div>
+                    <div class="bot-model">${modelLabel}${isImageBot ? ' · Image bot' : ''}${bot.isDefault ? ' · Default' : ''}</div>
                 `;
                 
                 card.querySelector('.edit-bot').addEventListener('click', () => editBot(bot.id));
@@ -2935,20 +2980,43 @@ Respond ONLY with the JSON object.`;
             }
         }
 
-        async function showBotForm(bot = null) {
-            switchSettingsTab('bot-form');
-            const headerTitle = document.getElementById('settings-header-title');
-            if (headerTitle) headerTitle.textContent = bot ? 'Edit bot' : 'New bot';
+        function renderBotKindBanner(kind) {
+            const banner = document.getElementById('bot-kind-banner');
+            if (!banner) return;
+            const isImageBot = kind === 'image';
+            const brush = isImageBot && window.ImageStudio ? ImageStudio.brushMarkup() : '';
+            banner.innerHTML = `
+                <span class="bot-kind-icon${isImageBot ? ' image' : ''}">
+                    <i data-lucide="${isImageBot ? 'image' : 'message-square'}"></i>
+                    ${brush}
+                </span>
+                <span>
+                    <strong>${isImageBot ? 'Image bot' : 'Conversation bot'}</strong>
+                    ${isImageBot
+                        ? ' — paints from a prompt. Reply to one of its images to ask for changes.'
+                        : ' — chats with a text model and its own persona.'}
+                </span>
+            `;
+            lucide.createIcons();
+        }
 
+        async function showBotForm(bot = null, kind = null) {
+            switchSettingsTab('bot-form');
+            const botKind = (bot ? bot.kind : kind) === 'image' ? 'image' : 'conversation';
+            const isImageBot = botKind === 'image';
+            const headerTitle = document.getElementById('settings-header-title');
+            if (headerTitle) headerTitle.textContent = `${bot ? 'Edit' : 'New'} ${isImageBot ? 'image bot' : 'bot'}`;
+
+            const form = document.getElementById('bot-form');
             const botsWithColors = await getAllBotsWithColors();
             const initialColor = bot?.color ? normalizeHex(bot.color) : getSuggestedBotColor(botsWithColors);
-            
-            // Populate model dropdown
-            const modelSelect = document.getElementById('bot-model');
-            modelSelect.innerHTML = '<option value="">Select a model...</option>';
-            
+
             const apiKeys = await getAllApiKeys();
             const configuredProviders = apiKeys.map(k => k.provider);
+
+            // ---- conversation bots: provider & model dropdown ----
+            const modelSelect = document.getElementById('bot-model');
+            modelSelect.innerHTML = '<option value="">Select a model...</option>';
             
             for (const [providerKey, provider] of Object.entries(MODEL_PROVIDERS)) {
                 if (!configuredProviders.includes(providerKey)) continue;
@@ -2981,10 +3049,67 @@ Respond ONLY with the JSON object.`;
                 try {
                     isCustom = Boolean(JSON.parse(modelSelect.value || '{}').custom);
                 } catch (parseErr) { /* placeholder option */ }
-                slugGroup.style.display = isCustom ? '' : 'none';
-                slugInput.required = isCustom;
+                slugGroup.style.display = !isImageBot && isCustom ? '' : 'none';
+                slugInput.required = !isImageBot && isCustom;
             };
             modelSelect.onchange = syncSlugField;
+
+            // ---- image bots: Gemini or an OpenRouter slug ----
+            const studio = window.ImageStudio;
+            const imageProviders = studio ? studio.IMAGE_PROVIDERS : { google: 'Gemini', openrouter: 'OpenRouter' };
+            const geminiPresets = studio ? studio.GEMINI_IMAGE_MODELS : [];
+            const imageProvider = document.getElementById('bot-image-provider');
+            const imageModel = document.getElementById('bot-image-model');
+            const imageCustom = document.getElementById('bot-image-custom-model');
+            const imageSlug = document.getElementById('bot-image-slug');
+
+            imageProvider.innerHTML = '';
+            for (const [key, label] of Object.entries(imageProviders)) {
+                const option = document.createElement('option');
+                const hasKey = configuredProviders.includes(key);
+                option.value = key;
+                option.textContent = hasKey ? label : `${label} (add an API key first)`;
+                option.disabled = !hasKey;
+                imageProvider.appendChild(option);
+            }
+            imageModel.innerHTML = '';
+            geminiPresets.forEach(preset => {
+                const option = document.createElement('option');
+                option.value = preset.id;
+                option.textContent = preset.name;
+                imageModel.appendChild(option);
+            });
+            const customOption = document.createElement('option');
+            customOption.value = '__custom__';
+            customOption.textContent = 'Custom model id…';
+            imageModel.appendChild(customOption);
+
+            const syncImageFields = () => {
+                const provider = imageProvider.value;
+                const isGoogle = provider === 'google';
+                const isCustom = isGoogle && imageModel.value === '__custom__';
+                document.getElementById('image-model-group').style.display = isImageBot && isGoogle ? '' : 'none';
+                document.getElementById('image-custom-model-group').style.display = isImageBot && isCustom ? '' : 'none';
+                document.getElementById('image-slug-group').style.display = isImageBot && provider === 'openrouter' ? '' : 'none';
+                imageCustom.required = isImageBot && isCustom;
+                imageSlug.required = isImageBot && provider === 'openrouter';
+            };
+            imageProvider.onchange = syncImageFields;
+            imageModel.onchange = syncImageFields;
+
+            const firstUsableProvider = [...imageProvider.options].find(option => !option.disabled)?.value || '';
+
+            // ---- fields that differ by kind ----
+            document.getElementById('model-group').style.display = isImageBot ? 'none' : '';
+            document.getElementById('image-provider-group').style.display = isImageBot ? '' : 'none';
+            modelSelect.required = !isImageBot;
+            const promptField = document.getElementById('bot-prompt');
+            promptField.required = !isImageBot;
+            document.getElementById('bot-prompt-label').textContent = isImageBot ? 'Style notes (optional)' : 'System Prompt';
+            promptField.placeholder = isImageBot
+                ? 'Soft natural light, film grain, muted palette…'
+                : 'You are a concise writing partner. Ask a clarifying question before drafting.';
+            renderBotKindBanner(botKind);
 
             // Populate form if editing
             if (bot) {
@@ -2993,27 +3118,53 @@ Respond ONLY with the JSON object.`;
                 document.getElementById('bot-alias').value = bot.alias ?? '';
                 document.getElementById('bot-prompt').value = bot.systemPrompt ?? '';
 
-                const presetValue = JSON.stringify({ provider: bot.provider, modelId: bot.modelId });
-                const isPreset = [...modelSelect.options].some(opt => opt.value === presetValue);
-                if (isPreset) {
-                    modelSelect.value = presetValue;
+                if (isImageBot) {
+                    // an existing bot stays editable even if its key was removed
+                    const own = [...imageProvider.options].find(option => option.value === bot.provider);
+                    if (own) own.disabled = false;
+                    imageProvider.value = own ? bot.provider : firstUsableProvider;
+                    if (bot.provider === 'google') {
+                        const isPreset = geminiPresets.some(preset => preset.id === bot.modelId);
+                        imageModel.value = isPreset ? bot.modelId : '__custom__';
+                        imageCustom.value = isPreset ? '' : (bot.modelId || '');
+                        imageSlug.value = '';
+                    } else {
+                        imageModel.value = geminiPresets[0]?.id || '__custom__';
+                        imageCustom.value = '';
+                        imageSlug.value = bot.modelId || '';
+                    }
+                    modelSelect.value = '';
                     slugInput.value = '';
                 } else {
-                    // a slug typed in by hand — reselect the custom entry
-                    modelSelect.value = JSON.stringify({ provider: bot.provider, custom: true });
-                    slugInput.value = bot.modelId || '';
+                    const presetValue = JSON.stringify({ provider: bot.provider, modelId: bot.modelId });
+                    const isPreset = [...modelSelect.options].some(opt => opt.value === presetValue);
+                    if (isPreset) {
+                        modelSelect.value = presetValue;
+                        slugInput.value = '';
+                    } else {
+                        // a slug typed in by hand — reselect the custom entry
+                        modelSelect.value = JSON.stringify({ provider: bot.provider, custom: true });
+                        slugInput.value = bot.modelId || '';
+                    }
                 }
                 renderBotColorPicker(normalizeHex(bot.color) || initialColor);
 
-                document.getElementById('bot-form').dataset.editingId = bot.id;
+                form.dataset.editingId = bot.id;
             } else {
-                document.getElementById('bot-form').reset();
+                form.reset();
                 slugInput.value = '';
-                delete document.getElementById('bot-form').dataset.editingId;
+                delete form.dataset.editingId;
                 renderBotColorPicker(initialColor);
+                imageProvider.value = firstUsableProvider;
+                imageModel.value = geminiPresets[0]?.id || '__custom__';
+                imageCustom.value = '';
+                imageSlug.value = '';
             }
 
+            // form.reset() puts the hidden field back to its markup default
+            document.getElementById('bot-kind').value = botKind;
             syncSlugField();
+            syncImageFields();
         }
 
         async function editBot(id) {
@@ -3030,48 +3181,101 @@ Respond ONLY with the JSON object.`;
 
         async function handleBotFormSubmit(e) {
             e.preventDefault();
-            
-            const modelValue = document.getElementById('bot-model').value;
-            if (!modelValue) {
-                alert('Please select a model before saving.');
+            const form = document.getElementById('bot-form');
+            const isImageBot = document.getElementById('bot-kind').value === 'image';
+
+            const name = document.getElementById('bot-name').value.trim();
+            const alias = document.getElementById('bot-alias').value.trim().toLowerCase();
+            if (!name || !alias) {
+                alert('Please fill in the bot name and alias.');
                 return;
             }
-            
-            let modelData;
-            try {
-                modelData = JSON.parse(modelValue);
-            } catch (parseErr) {
-                alert('Invalid model selection. Please choose a model.');
-                return;
-            }
-            
-            let modelId = modelData.modelId;
-            if (modelData.custom) {
-                modelId = document.getElementById('bot-model-slug').value.trim();
-                if (!modelId) {
-                    alert('Enter a model slug, for example anthropic/claude-sonnet-5');
+
+            let provider;
+            let modelId;
+            if (isImageBot) {
+                provider = document.getElementById('bot-image-provider').value;
+                if (!provider) {
+                    alert('Add a Gemini or OpenRouter API key before creating an image bot.');
                     return;
+                }
+                if (provider === 'google') {
+                    const picked = document.getElementById('bot-image-model').value;
+                    modelId = picked === '__custom__'
+                        ? document.getElementById('bot-image-custom-model').value.trim()
+                        : picked;
+                } else {
+                    modelId = document.getElementById('bot-image-slug').value.trim();
+                }
+                if (!modelId) {
+                    alert(provider === 'google'
+                        ? 'Enter a Gemini image model id, for example gemini-2.5-flash-image'
+                        : 'Enter an OpenRouter model slug, for example google/gemini-2.5-flash-image');
+                    return;
+                }
+            } else {
+                const modelValue = document.getElementById('bot-model').value;
+                if (!modelValue) {
+                    alert('Please select a model before saving.');
+                    return;
+                }
+                
+                let modelData;
+                try {
+                    modelData = JSON.parse(modelValue);
+                } catch (parseErr) {
+                    alert('Invalid model selection. Please choose a model.');
+                    return;
+                }
+                
+                provider = modelData.provider;
+                modelId = modelData.modelId;
+                if (modelData.custom) {
+                    modelId = document.getElementById('bot-model-slug').value.trim();
+                    if (!modelId) {
+                        alert('Enter a model slug, for example anthropic/claude-sonnet-5');
+                        return;
+                    }
                 }
             }
 
             const bot = {
-                name: document.getElementById('bot-name').value.trim(),
-                alias: document.getElementById('bot-alias').value.trim().toLowerCase(),
+                name,
+                alias,
                 modelId,
-                provider: modelData.provider,
+                provider,
                 systemPrompt: document.getElementById('bot-prompt').value.trim(),
                 color: normalizeHex(document.getElementById('bot-color').value) || BOT_COLORS[0]
             };
+            if (isImageBot) bot.kind = 'image';
             
-            if (!bot.name || !bot.alias) {
-                alert('Please fill in the bot name and alias.');
-                return;
-            }
-            
-            const editingId = document.getElementById('bot-form').dataset.editingId;
+            const editingId = form.dataset.editingId;
             if (editingId) {
                 const existing = await getBot(parseInt(editingId));
                 Object.assign(bot, { ...existing, ...bot, id: parseInt(editingId) });
+                if (!isImageBot) delete bot.kind;
+            }
+
+            // an image bot only saves once its model is known to output images
+            if (isImageBot && window.ImageStudio) {
+                const submitBtn = form.querySelector('button[type="submit"]');
+                const label = submitBtn.textContent;
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Verifying model…';
+                let verdict;
+                try {
+                    verdict = await ImageStudio.validateImageModel(provider, modelId);
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = label;
+                }
+                if (!verdict.ok) {
+                    alert(verdict.reason);
+                    return;
+                }
+                if (verdict.uncertain && !confirm(`${verdict.reason}\n\nSave the bot anyway?`)) {
+                    return;
+                }
             }
             
             try {
@@ -3624,6 +3828,9 @@ Respond ONLY with the JSON object.`;
         }
 
         async function openConversation(conversationId) {
+            if (window.ImageStudio && String(currentConversationId) !== String(conversationId)) {
+                ImageStudio.closeCanvas();
+            }
             currentConversationId = conversationId;
                 
             const allConversations = document.querySelectorAll('.conversation-item');
@@ -3787,15 +3994,18 @@ Respond ONLY with the JSON object.`;
             return tone === 'light' ? '#FFFFFF' : '#1a1a1a';
         }
 
-        function createBotFaceAvatar(botColor) {
+        // Image bots hold a paintbrush wherever their face shows up.
+        function createBotFaceAvatar(botColor, kind = null) {
             const color = normalizeHex(botColor) || '#4285F4';
             const eyeColor = getEyeColorForAvatar(color);
             const avatar = document.createElement('div');
             avatar.className = 'bot-face-avatar';
             avatar.style.backgroundColor = color;
+            const brush = kind === 'image' && window.ImageStudio ? ImageStudio.brushMarkup() : '';
             avatar.innerHTML = `
                 <div class="bot-eye left" style="background-color: ${eyeColor};"></div>
                 <div class="bot-eye right" style="background-color: ${eyeColor};"></div>
+                ${brush}
             `;
             return avatar;
         }
@@ -3810,19 +4020,27 @@ Respond ONLY with the JSON object.`;
             if (actions) actions.classList.toggle('menu-open', open);
         }
 
-        function renderMessage(message) {
-            const messageContainer = document.createElement('div');
+        // `into` re-renders the message inside an existing container (used to
+        // turn the painting placeholder into the finished image without a jump).
+        function renderMessage(message, into = null) {
+            const messageContainer = into || document.createElement('div');
             messageContainer.className = `message-container ${message.sender}`;
+            if (into) {
+                messageContainer.innerHTML = '';
+                messageContainer.classList.add('no-appear');
+            }
             messageContainer.dataset.id = message.id;
             
             // Add bot face avatar for bot messages
             if (message.sender === 'bot') {
-                const avatar = createBotFaceAvatar(message.botColor);
+                const avatar = createBotFaceAvatar(message.botColor, message.botKind);
                 messageContainer.appendChild(avatar);
             }
 
+            const studio = window.ImageStudio;
+            const isImage = Boolean(message.image) && Boolean(studio);
             const messageElem = document.createElement('div');
-            messageElem.className = `message ${message.sender}`;
+            messageElem.className = `message ${message.sender}${isImage ? ' image-message' : ''}`;
 
             if (message.fontSize) {
                 messageElem.style.fontSize = `${message.fontSize}px`;
@@ -3833,6 +4051,16 @@ Respond ONLY with the JSON object.`;
             
             let messageContent = message.html || message.text;
             const timeString = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            let body;
+            if (isImage) {
+                body = studio.imageFrameMarkup(message);
+                if (message.text) body += `<div class="message-content image-caption">${studio.escapeHtml(message.text)}</div>`;
+            } else {
+                const isReply = message.replyTo != null || Boolean(message.replyToText);
+                const chip = message.sender === 'user' && isReply && studio ? studio.replyChipMarkup(message) : '';
+                body = `${chip}<div class="message-content">${messageContent}</div>`;
+            }
             
             messageElem.innerHTML = `
                 <div class="message-actions">
@@ -3841,12 +4069,13 @@ Respond ONLY with the JSON object.`;
                         <button type="button" class="message-action-item" data-action="reply"><span>Reply</span></button>
                     </div>
                 </div>
-                <div class="message-content">${messageContent}</div>
+                ${body}
                 <div class="message-time">${timeString}</div>
             `;
             
             messageContainer.appendChild(messageElem);
-            document.getElementById('chat-messages').appendChild(messageContainer);
+            if (!into) document.getElementById('chat-messages').appendChild(messageContainer);
+            if (isImage) studio.bindImageFrame(messageElem, message);
             
             const actionsBtn = messageElem.querySelector('.message-actions-btn');
             const actionsDropdown = messageElem.querySelector('.message-actions-dropdown');
@@ -3873,22 +4102,39 @@ Respond ONLY with the JSON object.`;
             });
         }
 
+        // The image being replied to, so the outgoing message can carry a
+        // thumbnail of it (the full image stays with the original message).
+        let pendingReplyImage = null;
+
         function showReplyPreview(message) {
             const replyPreview = document.getElementById('reply-preview');
             const replyPreviewText = document.getElementById('reply-preview-text');
             
             replyPreview.classList.add('active');
             replyPreview.dataset.replyTo = message.id;
-            
-            let previewText = message.text;
-            if (previewText.length > 50) {
-                previewText = previewText.substring(0, 50) + '...';
+
+            if (message.image && window.ImageStudio) {
+                const who = ImageStudio.escapeHtml(message.botName || 'the bot');
+                const prompt = message.imagePrompt || '';
+                const detail = prompt ? ` · ${ImageStudio.escapeHtml(prompt.length > 40 ? prompt.slice(0, 39) + '…' : prompt)}` : '';
+                replyPreviewText.classList.add('has-thumb');
+                replyPreviewText.innerHTML = `<img class="reply-preview-thumb" src="${message.image}" alt=""><span>Replying to ${who}'s image${detail}</span>`;
+                replyPreview.dataset.replyToText = prompt ? `image: ${prompt}` : 'image';
+                pendingReplyImage = message.image;
+            } else {
+                replyPreviewText.classList.remove('has-thumb');
+                let previewText = message.text || '';
+                if (previewText.length > 50) {
+                    previewText = previewText.substring(0, 50) + '...';
+                }
+                
+                replyPreviewText.innerHTML = `Replying to: ${previewText}`;
+                replyPreview.dataset.replyToText = message.text || '';
+                pendingReplyImage = null;
             }
-            
-            replyPreviewText.innerHTML = `Replying to: ${previewText}`;
-            replyPreview.dataset.replyToText = message.text;
             replyPreview.dataset.replyToSender = message.sender;
             replyPreview.dataset.replyToBotColor = normalizeHex(message.botColor) || '';
+            replyPreview.dataset.replyToBotId = message.botId != null ? String(message.botId) : '';
             
             document.getElementById('editor').focus();
         }
@@ -3897,6 +4143,9 @@ Respond ONLY with the JSON object.`;
             const replyPreview = document.getElementById('reply-preview');
             replyPreview.classList.remove('active');
             delete replyPreview.dataset.replyTo;
+            delete replyPreview.dataset.replyToBotId;
+            document.getElementById('reply-preview-text').classList.remove('has-thumb');
+            pendingReplyImage = null;
         }
 
         // =============================================
@@ -3984,6 +4233,12 @@ Respond ONLY with the JSON object.`;
                 message.replyToText = replyPreview.dataset.replyToText;
                 message.replyToSender = replyPreview.dataset.replyToSender;
                 message.replyToBotColor = replyPreview.dataset.replyToBotColor;
+                const replyBotId = Number(replyPreview.dataset.replyToBotId);
+                if (replyPreview.dataset.replyToBotId && !Number.isNaN(replyBotId)) message.replyToBotId = replyBotId;
+                if (pendingReplyImage && window.ImageStudio) {
+                    message.replyToImage = true;
+                    message.replyToThumb = await ImageStudio.makeThumb(pendingReplyImage);
+                }
             }
             
             await saveMessage(message);
@@ -4008,18 +4263,18 @@ Respond ONLY with the JSON object.`;
             updateContextPill();
             
             setTimeout(() => {
-                generateBotResponses(currentConversationId, mentions, message.id);
+                generateBotResponses(currentConversationId, mentions, message);
             }, 500);
         }
 
 
-        function saveMessage(message) {
+        function saveMessage(message, into = null) {
             if (incognitoConversationIds.has(message.conversationId)) {
                 message.id = `ephemeral-message-${Date.now()}-${Math.random().toString(16).slice(2)}`;
                 const messages = ephemeralMessages.get(message.conversationId) || [];
                 messages.push(message);
                 ephemeralMessages.set(message.conversationId, messages);
-                renderMessage(message);
+                renderMessage(message, into);
                 const chatMessages = document.getElementById('chat-messages');
                 chatMessages.scrollTop = chatMessages.scrollHeight;
                 return Promise.resolve(message);
@@ -4031,7 +4286,7 @@ Respond ONLY with the JSON object.`;
                 
                 request.onsuccess = () => {
                     message.id = request.result;
-                    renderMessage(message);
+                    renderMessage(message, into);
                     
                     const chatMessages = document.getElementById('chat-messages');
                     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -4075,9 +4330,12 @@ Respond ONLY with the JSON object.`;
         // =============================================
         // BOT RESPONSES
         // =============================================
-        async function generateBotResponses(conversationId, mentions, replyToId) {
+        async function generateBotResponses(conversationId, mentions, userMessage = null) {
             let responseBots = [];
             const allBots = await getAllBotsWithColors();
+            const repliedBot = userMessage?.replyToBotId != null
+                ? allBots.find(bot => bot.id === userMessage.replyToBotId)
+                : null;
             
             if (mentions.includes('all')) {
                 responseBots = allBots;
@@ -4088,6 +4346,9 @@ Respond ONLY with the JSON object.`;
                         responseBots.push(bot);
                     }
                 }
+            } else if (repliedBot) {
+                // replying to a bot's message addresses that bot
+                responseBots = [repliedBot];
             } else if (lastInvokedBot) {
                 responseBots = [lastInvokedBot];
             } else if (allBots.length > 0) {
@@ -4099,23 +4360,29 @@ Respond ONLY with the JSON object.`;
             let delay = 0;
             for (const bot of responseBots) {
                 setTimeout(() => {
-                    sendBotResponse(bot, conversationId);
+                    sendBotResponse(bot, conversationId, userMessage);
                 }, delay);
                 
                 delay += 1500 + Math.random() * 1000;
             }
         }
 
-        function createTypingIndicator() {
+        // The same "thinking..." pill the image bots use while painting.
+        function createTypingIndicator(bot = null) {
             const indicatorContainer = document.createElement('div');
-            indicatorContainer.className = 'message-container bot';
+            indicatorContainer.className = 'message-container bot thinking-indicator';
+            if (bot) indicatorContainer.appendChild(createBotFaceAvatar(bot.color, bot.kind));
             
             const indicator = document.createElement('div');
-            indicator.className = 'typing-indicator';
-            
-            for (let i = 0; i < 3; i++) {
-                const dot = document.createElement('span');
-                indicator.appendChild(dot);
+            if (window.ImageStudio) {
+                indicator.className = 'thinking-pill';
+                indicator.innerHTML = ImageStudio.thinkingMarkup('thinking...');
+            } else {
+                indicator.className = 'typing-indicator';
+                for (let i = 0; i < 3; i++) {
+                    const dot = document.createElement('span');
+                    indicator.appendChild(dot);
+                }
             }
             
             indicatorContainer.appendChild(indicator);
@@ -4212,9 +4479,12 @@ Respond ONLY with the JSON object.`;
             }], systemPrompt);
         }
 
-        async function sendBotResponse(bot, conversationId) {
+        async function sendBotResponse(bot, conversationId, userMessage = null) {
+            if (bot.kind === 'image' && window.ImageStudio) {
+                return ImageStudio.respond(bot, conversationId, userMessage);
+            }
             lastInvokedBot = bot;
-            const typingIndicator = createTypingIndicator();
+            const typingIndicator = createTypingIndicator(bot);
             
             try {
                 const context = await buildContextForConversation(conversationId);
@@ -4396,17 +4666,20 @@ Respond ONLY with the JSON object.`;
                 const avatarColor = normalizeHex(bot.color) || BOT_COLORS[0];
                 const eyeColor = getEyeColorForAvatar(avatarColor);
 
+                const isImageBot = bot.kind === 'image';
+                const brush = isImageBot && window.ImageStudio ? ImageStudio.brushMarkup() : '';
                 item.innerHTML = `
                     <div class="mention-info">
                         <span class="bot-face-avatar mention-bot-avatar" style="background-color: ${avatarColor};">
                             <span class="bot-eye left" style="background-color: ${eyeColor};"></span>
                             <span class="bot-eye right" style="background-color: ${eyeColor};"></span>
+                            ${brush}
                         </span>
                         <span class="mention-alias">${bot.alias}</span>
                     </div>
-                    <div class="context-meter">
+                    ${isImageBot ? '' : `<div class="context-meter">
                         <div class="context-fill ${fillClass}" style="width: ${Math.min(contextUsage * 100, 100)}%"></div>
-                    </div>
+                    </div>`}
                 `;
                 
                 item.addEventListener('click', () => {
